@@ -1,54 +1,24 @@
 <#
 Keep Teams Active (toggle)
 
-  Install (once):  double-click Install.bat
-                   (or: powershell -ExecutionPolicy Bypass -File .\KeepTeamsActive.ps1 -Install)
-  Use:             Double-click "Keep Teams Active" on desktop  -> ON  (tray icon appears)
-                   Double-click it again                         -> OFF
-                   Or right-click tray icon > Stop
-  Remove:          double-click Uninstall.bat
-                   (or: powershell -ExecutionPolicy Bypass -File .\KeepTeamsActive.ps1 -Uninstall)
+  Run:   powershell -NoProfile -ExecutionPolicy Bypass -File .\KeepTeamsActive.ps1
+         -> ON (tray icon appears near the clock)
+  Stop:  right-click the tray icon > Stop, close the PowerShell window,
+         or run the same command again (it toggles OFF).
+  Option: -IntervalSec 120   (seconds between key presses, default 60)
+
+  Nothing is installed: no shortcuts, no registry, no files written.
 
   How: sends an F15 keypress (no app uses it) every N seconds, which resets the
   Windows idle timer that Teams reads. Also blocks sleep / display-off while ON.
 #>
 param(
-    [switch]$Install,
-    [switch]$Uninstall,
     [int]$IntervalSec = 60
 )
 
 $AppName    = 'Keep Teams Active'
-$InstallDir = Join-Path $env:LOCALAPPDATA 'KeepTeamsActive'
-$Target     = Join-Path $InstallDir 'KeepTeamsActive.ps1'
-$Lnk        = Join-Path ([Environment]::GetFolderPath('Desktop')) "$AppName.lnk"
 $MutexName  = 'Local\KeepTeamsActive'
 $StopName   = 'Local\KeepTeamsActive_Stop'
-
-# ---------------- install / uninstall ----------------
-if ($Install) {
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    if ($PSCommandPath -ne $Target) { Copy-Item $PSCommandPath $Target -Force }
-    Unblock-File $Target -ErrorAction SilentlyContinue   # clear "downloaded from internet" flag
-
-    $s = (New-Object -ComObject WScript.Shell).CreateShortcut($Lnk)
-    $s.TargetPath       = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $s.Arguments        = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Target`" -IntervalSec $IntervalSec"
-    $s.WorkingDirectory = $InstallDir
-    $s.WindowStyle      = 7   # minimized, avoids console flash
-    $s.Description      = "Toggle $AppName on/off"
-    $s.Save()
-    Write-Host "Installed. Shortcut: $Lnk"
-    return
-}
-
-if ($Uninstall) {
-    try { [System.Threading.EventWaitHandle]::OpenExisting($StopName).Set() | Out-Null; Start-Sleep 2 } catch {}
-    Remove-Item $Lnk -Force -ErrorAction SilentlyContinue
-    Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host 'Uninstalled.'
-    return
-}
 
 # ---------------- toggle: if already running, stop it ----------------
 $created = $false
@@ -83,7 +53,7 @@ $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $menu.Items.Add('Stop', $null, { [System.Windows.Forms.Application]::Exit() }) | Out-Null
 $tray.ContextMenuStrip = $menu
 $tray.Visible = $true
-$tray.ShowBalloonTip(2000, $AppName, 'ON. Double-click shortcut again or right-click tray icon to stop.', 'Info')
+$tray.ShowBalloonTip(2000, $AppName, 'ON. Right-click this tray icon > Stop to turn off.', 'Info')
 
 $nudgeTimer = New-Object System.Windows.Forms.Timer
 $nudgeTimer.Interval = [Math]::Max(5, $IntervalSec) * 1000
